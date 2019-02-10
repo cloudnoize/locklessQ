@@ -24,22 +24,22 @@ func (this *Q) Insert(f float32) bool {
 	if space == 0 {
 		return false
 	}
-	atomic.AddInt32(&this.space, -1)
 	this.Q[this.writer] = f
+	atomic.AddInt32(&this.space, -1)
 	this.writer++
 	this.writer %= this.size
 	return true
 }
 
-func (q *Q) Pop() (float32, bool) {
-	space := atomic.LoadInt32(&q.space)
-	if space == q.size {
+func (this *Q) Pop() (float32, bool) {
+	space := atomic.LoadInt32(&this.space)
+	if space == this.size {
 		return 0, false
 	}
-	atomic.AddInt32(&q.space, 1)
-	ret := q.Q[q.reader]
-	q.reader++
-	q.reader %= q.size
+	ret := this.Q[this.reader]
+	atomic.AddInt32(&this.space, 1)
+	this.reader++
+	this.reader %= this.size
 	return ret, true
 }
 
