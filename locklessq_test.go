@@ -1,76 +1,115 @@
 package locklessq
 
 import (
-	"sync"
 	"testing"
+	"time"
 )
 
-func BenchmarkPop(b *testing.B) {
-	var size int32 = 44100000
-	q := New(size)
-
-	for i := 0; i < int(size); i++ {
-		q.Insert(1.0)
-	}
-
-	for n := 0; n < b.N; n++ {
-		q.Pop()
-	}
-}
-
-func TestFree(t *testing.T) {
-	var s int32 = 100
-	q := New(s)
-
-	for i := 0; i < int(s); i++ {
-		q.Insert(1)
-	}
-
-	if q.WriteAvailble() != 0 {
-		t.Errorf("expected ")
-	}
-
-	if q.ReadAvailble() != s {
-		t.Errorf("expected read")
-	}
-
-}
-
-func TestThreads(t *testing.T) {
-	var wg sync.WaitGroup
-	wg.Add(2)
-
-	var size int32 = 44100
-	var pushes int32 = 80000
-	var pops int32 = 50000
-
-	q := New(size)
-	var f float32 = 1.0
-	start := false
-	go func() {
-		defer wg.Done()
-
-		for i := 0; int32(i) < pushes; i++ {
-			q.Insert(f)
-			start = true
-			f++
+func TestInsert(t *testing.T) {
+	size := 100
+	q := New(int32(size))
+	for i := 0; i < size; i++ {
+		ok := q.Insert(float32(i))
+		if !ok {
+			t.Error("Failed to insert")
 		}
-		println("fff")
+	}
+	ok := q.Insert(float32(1.1))
+	if ok {
+		t.Error("Should have Failed to insert")
+	}
+}
+
+func TestPop(t *testing.T) {
+	size := 2
+	q := New(int32(size))
+	_, ok := q.Pop()
+	if ok {
+		t.Error("Should have Failed pop")
+	}
+
+	for i := 0; i < size; i++ {
+		ok := q.Insert(float32(i))
+		if !ok {
+			t.Error("Failed to pop")
+		}
+	}
+
+	v, ok := q.Pop()
+	v, ok = q.Pop()
+	if !ok {
+		t.Error("Failed pop")
+	}
+	if v != float32(1) {
+		t.Error("Expected ", float32(1), "got ", v)
+	}
+
+	v, ok = q.Pop()
+	if ok {
+		t.Error("Should have Failed pop")
+	}
+}
+
+func TestStress(t *testing.T) {
+	size := 100
+	q := New(int32(size))
+	cont := true
+	go func() {
+		for cont {
+			q.Pop()
+		}
 	}()
 
 	go func() {
-		defer wg.Done()
+		var v float32
+		for cont {
+			q.Insert(v)
+			v++
+		}
+	}()
 
-		for i := 0; int32(i) < pops; i++ {
-			if start && q.Pop() == 0 {
-				t.Errorf("got 0 q has %d free space", q.ReadAvailble())
-				return
+	time.Sleep(10 * time.Second)
+	cont = false
+}
+
+func TestCorrectness(t *testing.T) {
+	size := 100
+	q := New(int32(size))
+	q2 := New(int32(size))
+	cont := true
+	go func() {
+		for cont {
+			v, ok := q.Pop()
+			if ok {
+				ok = q2.Insert(v)
+				if v >= float32(size) && ok {
+					t.Errorf("shouldnt have happened %v", v)
+					return
+				}
 			}
 		}
-		println("ssss")
-
+		println("reader exit")
 	}()
 
-	wg.Wait()
+	go func() {
+		v := float32(0)
+		for cont {
+			q.Insert(v)
+			v++
+		}
+		println("writer exit")
+	}()
 
+	time.Sleep(3 * time.Second)
+	cont = false
+	time.Sleep(1 * time.Second)
+	for i := 0; i < size; i++ {
+		v, ok := q2.Pop()
+		if !ok {
+			t.Error("shouldnt have failed")
+		}
+		if i != int(v) {
+			t.Errorf("left side %v != %v \nshould be incremental %v", i, v, q2.Q)
+		}
+	}
 }

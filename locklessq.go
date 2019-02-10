@@ -9,48 +9,44 @@ type Q struct {
 	reader int32
 	writer int32
 	size   int32
-	free   int32
+	space  int32
 }
 
+//Allocates slice with length and capacity of size.
 func New(size int32) *Q {
-	return &Q{Q: make([]float32, size, size), size: size, free: size}
+	return &Q{Q: make([]float32, size, size), size: size, space: size}
 }
 
-func (q *Q) Insert(f float32) bool {
-	free := atomic.LoadInt32(&q.free)
-	if free == 0 {
-		// println("locklessq insert returns false")
+//Inserts item to Q.
+//Tests if Q has space, since its single writer, test is safe.
+func (this *Q) Insert(f float32) bool {
+	space := atomic.LoadInt32(&this.space)
+	if space == 0 {
 		return false
 	}
-	// println("Insert free", q.free)
-	atomic.AddInt32(&q.free, -1)
-	q.Q[q.writer] = f
-	q.writer++
-	q.writer %= q.size
+	atomic.AddInt32(&this.space, -1)
+	this.Q[this.writer] = f
+	this.writer++
+	this.writer %= this.size
 	return true
 }
 
-func (q *Q) Pop() float32 {
-	free := atomic.LoadInt32(&q.free)
-	if free == q.size {
-		println("retruning 0 -- free ", free, " size ", q.size)
-		//panic("locklessq pop return 0")
-
-		return 0
+func (q *Q) Pop() (float32, bool) {
+	space := atomic.LoadInt32(&q.space)
+	if space == q.size {
+		return 0, false
 	}
-	// println("Pop free", q.free)
-
-	atomic.AddInt32(&q.free, 1)
+	atomic.AddInt32(&q.space, 1)
 	ret := q.Q[q.reader]
 	q.reader++
 	q.reader %= q.size
-	return ret
+	return ret, true
 }
 
 func (q *Q) ReadAvailble() int32 {
-	return q.size - atomic.LoadInt32(&q.free)
+	return q.size - atomic.LoadInt32(&q.space)
 }
 
 func (q *Q) WriteAvailble() int32 {
-	return atomic.LoadInt32(&q.free)
+	return atomic.LoadInt32(&q.space)
 }
