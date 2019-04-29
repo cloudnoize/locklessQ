@@ -51,6 +51,10 @@ func (q *Qfloat32) WriteAvailble() int32 {
 	return atomic.LoadInt32(&q.space)
 }
 
+func (q *Qfloat32) Size() int32 {
+	return int32(len(q.Q)) - atomic.LoadInt32(&q.space)
+}
+
 type Qint16 struct {
 	Q      []int16
 	reader int32
@@ -96,4 +100,8 @@ func (q *Qint16) ReadAvailble() int32 {
 
 func (q *Qint16) WriteAvailble() int32 {
 	return atomic.LoadInt32(&q.space)
+}
+
+func (q *Qint16) Size() int32 {
+	return int32(len(q.Q)) - atomic.LoadInt32(&q.space)
 }
